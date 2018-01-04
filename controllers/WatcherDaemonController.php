@@ -114,13 +114,4 @@ abstract class WatcherDaemonController extends DaemonController
      */
     abstract protected function getDaemonsList();
 
-    /**
-     * @param $pid
-     *
-     * @return bool
-     */
-    public function isProcessRunning($pid)
-    {
-        return file_exists("/proc/$pid");
-    }
 }

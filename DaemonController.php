@@ -89,8 +89,19 @@ abstract class DaemonController extends Controller
         pcntl_signal(SIGCHLD, ['vyants\daemon\DaemonController', 'signalHandler']);
     }
 
-    function __destruct()
+     /**
+     * @param $pid
+     *
+     * @return bool
+     */
+    public function isProcessRunning($pid)
     {
+        return file_exists("/proc/$pid");
+    }
+
+    public function __destruct()
+    {
+        $this->terminateChildren();
         $this->deletePid();
     }
 
@@ -186,6 +197,26 @@ abstract class DaemonController extends Controller
             $this->stdErr = fopen('/dev/null', 'ab');
         }
     }
+
+    protected function terminateChildren()
+    {
+        foreach (static::$currentJobs as $pid) {
+            $this->terminateChild($pid);
+        }
+    }
+
+    protected function terminateChild($pid)
+    {
+        if ($this->isProcessRunning($pid)) {
+            if (isset($job['hardKill']) && $job['hardKill']) {
+                posix_kill($pid, SIGKILL);
+            } else {
+                posix_kill($pid, SIGTERM);
+                pcntl_waitpid($pid, $status);
+            }
+        }
+    }
+
 
     /**
      * Prevent non index action running
