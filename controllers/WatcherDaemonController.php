@@ -49,11 +49,11 @@ abstract class WatcherDaemonController extends DaemonController
             $pid = file_get_contents($pid_file);
             if ($this->isProcessRunning($pid)) {
                 if ($job['enabled']) {
-                    \Yii::trace('Daemon ' . $job['daemon'] . ' running and working fine');
+                    \Yii::trace('Daemon ' . $job['daemon'] . ' is running and working fine');
 
                     return true;
                 } else {
-                    \Yii::warning('Daemon ' . $job['daemon'] . ' running, but disabled in config. Send SIGTERM signal.');
+                    \Yii::warning('Daemon ' . $job['daemon'] . ' is running, but disabled in config. Send SIGTERM signal.');
                     if (isset($job['hardKill']) && $job['hardKill']) {
                         posix_kill($pid, SIGKILL);
                     } else {
@@ -66,7 +66,7 @@ abstract class WatcherDaemonController extends DaemonController
         }
         \Yii::error('Daemon pid not found.');
         if ($job['enabled']) {
-            \Yii::trace('Try to run daemon ' . $job['daemon'] . '.');
+            \Yii::trace('Trying to run daemon ' . $job['daemon'] . '.');
             $command_name = $job['daemon'] . DIRECTORY_SEPARATOR . 'index';
             //flush log before fork
             $this->flushLog(true);

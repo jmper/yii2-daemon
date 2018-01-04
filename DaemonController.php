@@ -201,7 +201,7 @@ abstract class DaemonController extends Controller
             $this->initLogger();
             if ($action->id != "index") {
                 throw new NotSupportedException(
-                    "Only index action allowed in daemons. So, don't create and call another"
+                    "Only index action is allowed in daemons. You can\'t create and call another"
                 );
             }
 
@@ -378,7 +378,7 @@ abstract class DaemonController extends Controller
                 if ($status) {
                     $this->halt(self::EXIT_CODE_NORMAL);
                 } else {
-                    $this->halt(self::EXIT_CODE_ERROR, 'Child process #' . $pid . ' return error.');
+                    $this->halt(self::EXIT_CODE_ERROR, 'Child process #' . $pid . ' returned error.');
                 }
             }
         } else {
