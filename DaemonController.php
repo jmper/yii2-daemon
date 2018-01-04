@@ -101,7 +101,6 @@ abstract class DaemonController extends Controller
 
     public function __destruct()
     {
-        $this->terminateChildren();
         $this->deletePid();
     }
 
@@ -158,7 +157,14 @@ abstract class DaemonController extends Controller
         $this->changeProcessName();
 
         //run loop
-        return $this->loop();
+        $result = $this->loop();
+        $this->cleanup();
+        return $result;
+    }
+
+    protected function cleanup()
+    {
+        $this->terminateChildren();
     }
 
     /**
