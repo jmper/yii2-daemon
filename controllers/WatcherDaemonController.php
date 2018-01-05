@@ -77,7 +77,9 @@ abstract class WatcherDaemonController extends DaemonController
             } elseif ($pid === 0) {
                 $this->cleanLog();
                 \Yii::$app->requestedRoute = $command_name;
-                \Yii::$app->runAction("$command_name", ['demonize' => 1]);
+                unset($job['daemon']);
+                unset($job['enabled']);
+                \Yii::$app->runAction("$command_name", $job);
                 $this->halt(0);
             } else {
                 $this->initLogger();
