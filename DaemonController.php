@@ -39,7 +39,7 @@ abstract class DaemonController extends Controller
     public $pidDir = "@runtime/daemons/pids";
 
     /**
-     * @var directory to store logs 
+     * @var directory to store logs
      */
     public $logDir = "@runtime/daemons/logs";
 
@@ -81,10 +81,6 @@ abstract class DaemonController extends Controller
      * @default 5sec
      */
     protected $slowDown = 5;
-
-    protected $pidDir = "@runtime/daemons/pids";
-
-    protected $logDir = "@runtime/daemons/logs";
 
     private $stdIn;
     private $stdOut;
