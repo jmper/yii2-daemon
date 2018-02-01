@@ -51,20 +51,26 @@ abstract class DaemonController extends Controller
 
     /**
      * @var int Memory limit for daemon, must bee less than php memory_limit
-     * @default 32M
+     * @default 256M
      */
     protected $memoryLimit = 268435456;
 
     /**
      * @var boolean used for soft daemon stop, set 1 to stop
      */
-    private static $stopFlag = false;
+    protected static $stopFlag = false;
 
     /**
-     * @var int Delay between task list checking
+     * @var int delay between task list checking (only if there is no tasks available)
      * @default 5sec
      */
     protected $sleep = 5;
+
+    /**
+     * @var int delay after each iteration (even if there are tasks to do)
+     * @default 5sec
+     */
+    protected $slowDown = 5;
 
     protected $pidDir = "@runtime/daemons/pids";
 
@@ -249,7 +255,7 @@ abstract class DaemonController extends Controller
     }
 
     /**
-     * Возвращает доступные опции
+     * Return available options
      *
      * @param string $actionID
      *
@@ -324,10 +330,10 @@ abstract class DaemonController extends Controller
                         $this->runDaemon($job);
                     }
                 } else {
-                    sleep($this->sleep);
+                    self::sleep($this->sleep);
                 }
-                pcntl_signal_dispatch();
                 $this->trigger(self::EVENT_AFTER_ITERATION);
+                self::sleep($this->slowDown);
             }
 
             \Yii::info('Daemon ' . $this->getProcessName() . ' pid ' . getmypid() . ' is stopped.');
@@ -361,6 +367,7 @@ abstract class DaemonController extends Controller
      */
     final static function signalHandler($signo, $pid = null, $status = null)
     {
+        \Yii::trace('caught signal ' . $signo);
         switch ($signo) {
             case SIGINT:
             case SIGTERM:
@@ -460,9 +467,27 @@ abstract class DaemonController extends Controller
      */
     protected function renewConnections()
     {
-        if (isset(\Yii::$app->db)) {
-            \Yii::$app->db->close();
-            \Yii::$app->db->open();
+        if (!isset(\Yii::$app->db)) {
+            return;
+        }
+        $retryCount = 0;
+        $ok = false;
+        while (!$ok) {
+            try {
+                \Yii::$app->db->close();
+                \Yii::$app->db->open();
+                $ok = true;
+            } catch (\Exception $e) {
+                \Yii::trace('retrying db connection renewal due to error: ' . $e->message);
+                $retryCount++;
+                if ($retryCount > 5) {
+                    throw $e;
+                }
+                usleep(100);
+            }
+        }
+        if ($retryCount > 0) {
+            \Yii::trace(sprintf('DB connection reopened after %d retries', $retryCount));
         }
     }
 
@@ -551,5 +576,19 @@ abstract class DaemonController extends Controller
     protected function flushLog($final = false)
     {
         \Yii::$app->log->logger->flush($final);
+    }
+
+    protected function sleep($seconds)
+    {
+        $remaining = $seconds;
+        while ($remaining > 0 && !self::$stopFlag) {
+            pcntl_signal_dispatch();
+            if (!self::$stopFlag) {
+                $remaining = sleep($remaining);
+            }
+            if ($remaining) {
+                \Yii::trace('Sleep interrupted, remaining ' . $remaining . ' seconds, stop flag is ' . (self::$stopFlag ? 'true' : 'false'));
+            }
+        }
     }
 }

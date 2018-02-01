@@ -17,11 +17,6 @@ abstract class WatcherDaemonController extends DaemonController
     public $daemonFolder = 'daemons';
 
     /**
-     * @var boolean flag for first iteration
-     */
-    protected $firstIteration = true;
-
-    /**
      * Prevent double start
      */
     public function init()
@@ -96,12 +91,7 @@ abstract class WatcherDaemonController extends DaemonController
      */
     protected function defineJobs()
     {
-        if ($this->firstIteration) {
-            $this->firstIteration = false;
-        } else {
-            sleep($this->sleep);
-        }
-
+        \Yii::trace('Getting daemons list for checking');
         return $this->getDaemonsList();
     }
 
