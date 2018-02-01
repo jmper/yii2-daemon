@@ -82,6 +82,10 @@ abstract class DaemonController extends Controller
      */
     protected $slowDown = 5;
 
+    protected $pidDir = "@runtime/daemons/pids";
+
+    protected $logDir = "@runtime/daemons/logs";
+
     private $stdIn;
     private $stdOut;
     private $stdErr;
