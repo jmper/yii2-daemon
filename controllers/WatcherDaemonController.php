@@ -3,6 +3,7 @@
 namespace vyants\daemon\controllers;
 
 use vyants\daemon\DaemonController;
+use vyants\daemon\Logger;
 
 /**
  * watcher-daemon - check another daemons and run it if need
@@ -39,16 +40,15 @@ abstract class WatcherDaemonController extends DaemonController
     {
         $pid_file = $this->getPidPath($job['daemon']);
 
-        \Yii::trace('Check daemon ' . $job['daemon']);
+        $this->log('checking status of ' . $job['daemon'], Logger::LEVEL_TRACE);
         if (file_exists($pid_file)) {
             $pid = file_get_contents($pid_file);
             if ($this->isProcessRunning($pid)) {
                 if ($job['enabled']) {
-                    \Yii::trace('Daemon ' . $job['daemon'] . ' is running and working fine');
-
+                    $this->log($job['daemon'] . ' is running and working fine', Logger::LEVEL_TRACE);
                     return true;
                 } else {
-                    \Yii::warning('Daemon ' . $job['daemon'] . ' is running, but disabled in config. Send SIGTERM signal.');
+                    $this->log($job['daemon'] . ' is running but disabled in config. Sending SIGTERM signal.', Logger::LEVEL_WARNING);
                     if (isset($job['hardKill']) && $job['hardKill']) {
                         posix_kill($pid, SIGKILL);
                     } else {
@@ -59,9 +59,9 @@ abstract class WatcherDaemonController extends DaemonController
                 }
             }
         }
-        \Yii::error('Daemon pid not found.');
+        $this->log($job['daemon'] . ': pid not found.', Logger::LEVEL_TRACE);
         if ($job['enabled']) {
-            \Yii::trace('Trying to run daemon ' . $job['daemon'] . '.');
+            $this->log('starting ' . $job['daemon'], Logger::LEVEL_TRACE);
             $command_name = $job['daemon'] . DIRECTORY_SEPARATOR . 'index';
             //flush log before fork
             $this->flushLog(true);
@@ -78,10 +78,9 @@ abstract class WatcherDaemonController extends DaemonController
                 $this->halt(0);
             } else {
                 $this->initLogger();
-                \Yii::trace('Daemon ' . $job['daemon'] . ' is running with pid ' . $pid);
+                $this->log('started ' . $job['daemon'] . ' (pid ' . $pid . ')', Logger::LEVEL_TRACE);
             }
         }
-        \Yii::trace('Daemon ' . $job['daemon'] . ' is checked.');
 
         return true;
     }
@@ -91,7 +90,7 @@ abstract class WatcherDaemonController extends DaemonController
      */
     protected function defineJobs()
     {
-        \Yii::trace('Getting daemons list for checking');
+        $this->log('getting job list for checking', Logger::LEVEL_TRACE);
         return $this->getDaemonsList();
     }
 

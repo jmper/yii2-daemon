@@ -5,6 +5,7 @@ namespace vyants\daemon;
 use yii\base\NotSupportedException;
 use yii\console\Controller;
 use yii\helpers\Console;
+use vyants\daemon\Logger;
 
 /**
  * Class DaemonController
@@ -43,6 +44,8 @@ abstract class DaemonController extends Controller
      */
     public $logDir = "@runtime/daemons/logs";
 
+    public $debug = false;
+
     /**
      * @var $parentPID int main procces pid
      */
@@ -65,11 +68,14 @@ abstract class DaemonController extends Controller
      */
     protected $memoryLimit = 268435456;
 
+    protected $logger;
+
     /**
      * @var boolean used for soft daemon stop, set 1 to stop
      */
     protected static $stopFlag = false;
 
+    protected static $debugMode = false;
     /**
      * @var int delay between task list checking (only if there is no tasks available)
      * @default 5sec
@@ -92,7 +98,8 @@ abstract class DaemonController extends Controller
     public function init()
     {
         parent::init();
-
+        $this->createLogger();
+        self::$debugMode = $this->debug;
         //set PCNTL signal handlers
         pcntl_signal(SIGTERM, ['vyants\daemon\DaemonController', 'signalHandler']);
         pcntl_signal(SIGINT, ['vyants\daemon\DaemonController', 'signalHandler']);
@@ -191,7 +198,7 @@ abstract class DaemonController extends Controller
             if (function_exists('setproctitle')) {
                 setproctitle($this->getProcessName());
             } else {
-                \Yii::error('Can\'t find cli_set_process_title or setproctitle function');
+                $this->log('Can\'t find cli_set_process_title or setproctitle function', Logger::LEVEL_ERROR);
             }
         }
     }
@@ -274,7 +281,13 @@ abstract class DaemonController extends Controller
             'taskLimit',
             'isMultiInstance',
             'maxChildProcesses',
+            'debug',
         ];
+    }
+
+    public function log($msg, $level)
+    {
+        $this->logger->log($msg, $level);
     }
 
     /**
@@ -305,13 +318,14 @@ abstract class DaemonController extends Controller
     final private function loop()
     {
         if (file_put_contents($this->getPidPath(), getmypid())) {
+            $this->log('pid file created: ' . $this->getPidPath(), Logger::LEVEL_TRACE);
             $this->parentPID = getmypid();
-            \Yii::trace('Daemon ' . $this->getProcessName() . ' pid ' . getmypid() . ' started.');
+            $this->log('started', Logger::LEVEL_INFO);
             while (!self::$stopFlag) {
                 if (memory_get_usage() > $this->memoryLimit) {
-                    \Yii::trace('Daemon ' . $this->getProcessName() . ' pid ' .
-                        getmypid() . ' used ' . memory_get_usage() . ' bytes on ' . $this->memoryLimit .
-                        ' bytes allowed by memory limit');
+                    $this->log($this->getProcessName() . ' (pid ' .
+                        getmypid() . ') used ' . memory_get_usage() . ' bytes on ' . $this->memoryLimit .
+                        ' bytes allowed by memory limit', Logger::LEVEL_WARNING);
                     break;
                 }
                 $this->trigger(self::EVENT_BEFORE_ITERATION);
@@ -321,15 +335,15 @@ abstract class DaemonController extends Controller
                     while (($job = $this->defineJobExtractor($jobs)) !== null) {
                         //if no free workers, wait
                         if ($this->isMultiInstance && (count(static::$currentJobs) >= $this->maxChildProcesses)) {
-                            \Yii::trace('Reached maximum number of child processes. Waiting...');
+                            $this->log('Reached maximum number of child processes. Waiting...', Logger::LEVEL_TRACE);
                             while (count(static::$currentJobs) >= $this->maxChildProcesses) {
                                 sleep(1);
                                 pcntl_signal_dispatch();
                             }
-                            \Yii::trace(
+                            $this->log(
                                 'Free workers found: ' .
                                 ($this->maxChildProcesses - count(static::$currentJobs)) .
-                                ' worker(s). Delegate tasks.'
+                                ' worker(s). Delegate tasks.', Logger::LEVEL_TRACE
                             );
                         }
                         pcntl_signal_dispatch();
@@ -342,7 +356,7 @@ abstract class DaemonController extends Controller
                 self::sleep($this->slowDown);
             }
 
-            \Yii::info('Daemon ' . $this->getProcessName() . ' pid ' . getmypid() . ' is stopped.');
+            $this->log('terminated', Logger::LEVEL_INFO);
 
             return self::EXIT_CODE_NORMAL;
         }
@@ -358,9 +372,8 @@ abstract class DaemonController extends Controller
         if (file_exists($pid)) {
             if (file_get_contents($pid) == getmypid()) {
                 unlink($this->getPidPath());
+                $this->log('Unlinked pid file ' . $this->getPidPath(), Logger::LEVEL_TRACE);
             }
-        } else {
-            \Yii::error('Can\'t unlink pid file ' . $this->getPidPath());
         }
     }
 
@@ -373,7 +386,6 @@ abstract class DaemonController extends Controller
      */
     final static function signalHandler($signo, $pid = null, $status = null)
     {
-        \Yii::trace('caught signal ' . $signo);
         switch ($signo) {
             case SIGINT:
             case SIGTERM:
@@ -450,12 +462,12 @@ abstract class DaemonController extends Controller
     {
         if ($message !== null) {
             if ($code == self::EXIT_CODE_ERROR) {
-                \Yii::error($message);
+                $this->log($message, Logger::LEVEL_ERROR);
                 if (!$this->demonize) {
                     $message = Console::ansiFormat($message, [Console::FG_RED]);
                 }
             } else {
-                \Yii::trace($message);
+                $this->log($message, Logger::LEVEL_INFO);
             }
             if (!$this->demonize) {
                 $this->writeConsole($message);
@@ -484,7 +496,7 @@ abstract class DaemonController extends Controller
                 \Yii::$app->db->open();
                 $ok = true;
             } catch (\Exception $e) {
-                \Yii::trace('retrying db connection renewal due to error: ' . $e->message);
+                $this->log('retrying db connection renewal due to error: ' . $e->getMessage(), Logger::LEVEL_TRACE);
                 $retryCount++;
                 if ($retryCount > 5) {
                     throw $e;
@@ -493,7 +505,7 @@ abstract class DaemonController extends Controller
             }
         }
         if ($retryCount > 0) {
-            \Yii::trace(sprintf('DB connection reopened after %d retries', $retryCount));
+            $this->log(sprintf('DB connection reopened after %d retries', $retryCount), Logger::LEVEL_TRACE);
         }
     }
 
@@ -568,6 +580,11 @@ abstract class DaemonController extends Controller
         }
     }
 
+    protected function createLogger()
+    {
+        $this->logger = \Yii::createObject(['class' => Logger::class, 'controller' => $this]);
+    }
+
     /**
      * Empty log queue
      */
@@ -593,7 +610,7 @@ abstract class DaemonController extends Controller
                 $remaining = sleep($remaining);
             }
             if ($remaining) {
-                \Yii::trace('Sleep interrupted, remaining ' . $remaining . ' seconds, stop flag is ' . (self::$stopFlag ? 'true' : 'false'));
+                $this->log('sleep interrupted, remaining ' . $remaining . ' seconds, stop flag is ' . (self::$stopFlag ? 'true' : 'false'), Logger::LEVEL_TRACE);
             }
         }
     }
