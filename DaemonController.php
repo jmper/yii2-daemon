@@ -384,8 +384,9 @@ abstract class DaemonController extends Controller
      * @param null $pid
      * @param null $status
      */
-    final static function signalHandler($signo, $pid = null, $status = null)
+    final static function signalHandler($signo, $siginfo = null)
     {
+        $status = null;
         switch ($signo) {
             case SIGINT:
             case SIGTERM:
@@ -399,8 +400,10 @@ abstract class DaemonController extends Controller
                 //user signal, not implemented
                 break;
             case SIGCHLD:
-                if (!$pid) {
+                if (!$siginfo) {
                     $pid = pcntl_waitpid(-1, $status, WNOHANG);
+                } else {
+                    $pid = $siginfo['pid'];
                 }
                 while ($pid > 0) {
                     if ($pid && isset(static::$currentJobs[$pid])) {
