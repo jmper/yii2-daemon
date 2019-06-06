@@ -545,7 +545,11 @@ abstract class DaemonController extends Controller
     public function getProcessName($route = null)
     {
         if (is_null($route)) {
-            $route = \Yii::$app->requestedRoute;
+            if (!empty(\Yii::$app)) {
+                $route = \Yii::$app->requestedRoute;
+            } else {
+                return null;
+            }
         }
 
         return str_replace(['/index', '/'], ['', '.'], $route);
