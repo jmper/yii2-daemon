@@ -26,26 +26,27 @@ class Logger extends \yii\base\BaseObject
 
     public function log($msg, $level)
     {
+        $processName = $this->controller->getProcessName();
         if ($this->_firstRun) {
-            openlog($this->controller->getProcessName(), LOG_PID, LOG_DAEMON);
+            openlog($processName, LOG_PID, LOG_DAEMON);
             $this->_firstRun = false;
         }
         if (in_array($level, [self::LEVEL_ERROR, self::LEVEL_INFO, self::LEVEL_TRACE, self::LEVEL_WARNING])) {
             switch ($level) {
                 case self::LEVEL_INFO:
-                    \Yii::info($msg);
+                    \Yii::info($msg, $processName);
                     $priority = LOG_INFO;
                     break;
                 case self::LEVEL_TRACE:
-                    \Yii::trace($msg);
+                    \Yii::trace($msg, $processName);
                     $priority = LOG_DEBUG;
                     break;
                 case self::LEVEL_ERROR:
-                    \Yii::error($msg);
+                    \Yii::error($msg, $processName);
                     $priority = LOG_ERR;
                     break;
                 case self::LEVEL_WARNING:
-                    \Yii::warning($msg);
+                    \Yii::warning($msg, $processName);
                     $priority = LOG_WARNING;
                     break;
             }
